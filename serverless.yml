@@ -1,0 +1,89 @@
+service: todo-app
+frameworkVersion: "3"
+
+custom:
+  tableName: "todo-table-${sls:stage}"
+  dynamodb:
+    # If you only want to use DynamoDB Local in some stages, declare them here
+    stages:
+      - ${self:provider.stage}
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+      seed: true
+      convertEmptyValues: true
+      # Uncomment only if you already have a DynamoDB running locally
+      noStart: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-west-2
+  stage: dev
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [TodoTable, Arn]
+  environment:
+    TODO_TABLE: ${self:custom.tableName}
+
+plugins:
+  - serverless-dynamodb-local
+  - serverless-dotenv-plugin
+  - serverless-offline
+
+functions:
+  create:
+    handler: src/lambda/create.handler
+    events:
+      - http:
+          path: todo
+          method: post
+          cors: true
+  list:
+    handler: src/lambda/list.handler
+    events:
+      - http:
+          path: todo
+          method: get
+          cors: true
+  get:
+    handler: src/lambda/get.handler
+    events:
+      - http:
+          path: todo/{id}
+          method: get
+          cors: true
+  delete:
+    handler: src/lambda/delete.handler
+    events:
+      - http:
+          path: todo/{id}
+          method: delete
+          cors: true
+
+resources:
+  Resources:
+    TodoTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.tableName}
